@@ -6,16 +6,17 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api/fliq': {
-        target: 'https://auto-question.fliq.one',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/fliq/, ''),
-      },
       '/api/fliq-dss': {
         target: 'https://api-dss.fliq.one',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/fliq-dss/, ''),
       },
+      '/api/fliq': {
+        target: 'https://auto-question.fliq.one',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/fliq/, ''),
+      },
+
       '/api/poly': {
         target: 'https://gamma-api.polymarket.com',
         changeOrigin: true,

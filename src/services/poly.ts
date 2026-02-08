@@ -61,21 +61,26 @@ export const fetchPolyMarkets = async (limit = 100, offset = 0): Promise<PolyMar
     }
 };
 
-export const filterPolyFootball = (markets: PolyMarket[]) => {
-    const FOOTBALL_LEAGUE_HINTS = [
+export const filterPolyMarkets = (markets: PolyMarket[]) => {
+    const CATEGORY_HINTS = [
         'la liga', 'premier league', 'epl', 'bundesliga', 'serie a',
-        'ligue', 'champions', 'europa', 'laliga'
+        'ligue', 'champions', 'europa', 'laliga', 'nba', 'basketball',
+        'super bowl', 'nfl', 'election', 'trump', 'biden', 'crypto', 'bitcoin', 'eth'
     ];
 
     return markets.filter(m => {
         const title = (m.title || '').toLowerCase();
         const description = (m.description || '').toLowerCase();
+        const tags = (m.tags || []).map(t => t.label.toLowerCase());
 
-        const isMatch = title.includes(' vs ') || title.includes(' v ');
-        const looksLikeFootball = FOOTBALL_LEAGUE_HINTS.some(hint =>
-            description.includes(hint) || title.includes(hint)
+        const matchesHint = CATEGORY_HINTS.some(hint =>
+            description.includes(hint) || title.includes(hint) || tags.includes(hint)
         );
 
-        return isMatch && looksLikeFootball;
+        // For sports, we look for ' vs ' or ' v '
+        const isMatch = title.includes(' vs ') || title.includes(' v ') || title.includes(' and ');
+
+        // Return if it matches any category hint OR is a match-up
+        return matchesHint || isMatch;
     });
 };
