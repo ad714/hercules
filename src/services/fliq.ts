@@ -82,16 +82,22 @@ export const filterFliqMatches = (questions: FliqQuestion[]) => {
 
             // Check headers for excluded keywords (passes, etc.) and Bengali characters
             const headers = [
-                bm.questionHeader,
-                bm.parentQuestionHeader,
-                bm.questionHeaderExpanded
+                bm.questionHeader || '',
+                bm.parentQuestionHeader || '',
+                bm.questionHeaderExpanded || ''
             ].filter(Boolean).join(' ').toLowerCase();
+
+            if (!headers) return true; // Keep it if no header (can't filter)
 
             if (PASS_METRIC_REGEX.test(headers)) {
                 return false;
             }
 
             if (REGEX_BENGALI.test(headers)) {
+                return false;
+            }
+
+            if (headers.includes('xplora')) {
                 return false;
             }
 

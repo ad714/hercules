@@ -11,7 +11,8 @@ export interface PolyToken {
 
 export interface PolyMarket {
     id: string;
-    title: string;
+    title?: string;
+    question?: string;
     description: string;
     startDate: string;
     endDate: string;
@@ -44,7 +45,33 @@ export const fetchPolyOrderbook = async (tokenId: string): Promise<PolyOrderbook
     }
 };
 
-export const fetchPolyMarkets = async (limit = 100, offset = 0): Promise<PolyMarket[]> => {
+export const searchPolyMarkets = async (query: string): Promise<PolyMarket[]> => {
+    try {
+        const response = await axios.get('/api/poly/public-search', {
+            params: {
+                q: query,
+                optimized: 'true',
+                type: 'events',
+                limit_per_type: 10
+            }
+        });
+
+        const events = response.data?.events || [];
+        if (events.length === 0) return [];
+
+        const marketPromises = events.map((event: any) =>
+            axios.get(`/api/poly/events/${event.id}`).then(res => res.data?.markets || []).catch(() => [])
+        );
+
+        const marketsArrays = await Promise.all(marketPromises);
+        return marketsArrays.flat();
+    } catch (error) {
+        console.error('Error searching Poly markets:', error);
+        return [];
+    }
+};
+
+export const fetchPolyMarkets = async (limit = 100, offset = 0, search?: string): Promise<PolyMarket[]> => {
     try {
         const response = await axios.get(POLY_API, {
             params: {
@@ -52,6 +79,7 @@ export const fetchPolyMarkets = async (limit = 100, offset = 0): Promise<PolyMar
                 closed: 'false',
                 limit,
                 offset,
+                ...(search ? { search } : {})
             }
         });
         return response.data || [];
@@ -69,7 +97,7 @@ export const filterPolyMarkets = (markets: PolyMarket[]) => {
     ];
 
     return markets.filter(m => {
-        const title = (m.title || '').toLowerCase();
+        const title = (m.title || m.question || '').toLowerCase();
         const description = (m.description || '').toLowerCase();
         const tags = (m.tags || []).map(t => t.label.toLowerCase());
 
@@ -78,7 +106,7 @@ export const filterPolyMarkets = (markets: PolyMarket[]) => {
         );
 
         // For sports, we look for ' vs ' or ' v '
-        const isMatch = title.includes(' vs ') || title.includes(' v ') || title.includes(' and ');
+        const isMatch = title.includes(' vs ') || title.includes(' v ') || title.includes(' and ') || title.includes(' against ');
 
         // Return if it matches any category hint OR is a match-up
         return matchesHint || isMatch;

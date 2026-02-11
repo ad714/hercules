@@ -7,50 +7,103 @@ export interface MatchResult {
     score: number;
 }
 
+const SPORTS_SYNONYMS: Record<string, string> = {
+    'man city': 'manchester city',
+    'man utd': 'manchester united',
+    'spurs': 'tottenham hotspur',
+    'wolves': 'wolverhampton wanderers',
+    'leicester': 'leicester city',
+    'brighton': 'brighton hove albion',
+    'west ham': 'west ham united',
+    'forest': 'nottingham forest',
+    'nufc': 'newcastle united',
+    'lfc': 'liverpool',
+    'mcfc': 'manchester city',
+    'mufc': 'manchester united'
+};
+
+const STOP_WORDS = new Set(['to', 'win', 'against', 'will', 'be', 'the', 'at', 'in', 'score', 'goals', 'more', 'than', 'a', 'an', 'and']);
+
 const normalizeText = (s: string): string => {
-    return s
-        .toLowerCase()
+    if (!s) return '';
+    let normalized = s.toLowerCase()
         .replace(/[^a-z0-9\s]/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
+
+    // Replace synonyms
+    Object.entries(SPORTS_SYNONYMS).forEach(([search, replace]) => {
+        normalized = normalized.replace(new RegExp(`\\b${search}\\b`, 'g'), replace);
+    });
+
+    return normalized;
 };
 
-const extractTeams = (text: string): [string, string] | [null, null] => {
-    const t = normalizeText(text);
-    if (t.includes(' vs ')) {
-        const parts = t.split(' vs ');
-        return [parts[0].trim(), parts[1].trim()];
-    }
-    if (t.includes(' v ')) {
-        const parts = t.split(' v ');
-        return [parts[0].trim(), parts[1].trim()];
+const cleanTokens = (s: string): string[] => {
+    return normalizeText(s).split(' ')
+        .filter(word => word && !STOP_WORDS.has(word));
+};
+
+export const extractTeams = (text: string): [string, string] | [null, null] => {
+    if (!text) return [null, null];
+    const t = text.toLowerCase().replace(/\s+/g, ' ').trim();
+
+    const delimiters = [' vs ', ' v ', ' versus ', ' @ ', ' at ', ' against ', ' beat ', ' and '];
+    for (const d of delimiters) {
+        if (t.includes(d)) {
+            const parts = t.split(d);
+            if (parts.length >= 2) {
+                return [parts[0].trim(), parts[1].trim()];
+            }
+        }
     }
     return [null, null];
 };
 
 const tokenSimilarity = (a: string, b: string): number => {
-    if (a === b) return 1.0;
     if (!a || !b) return 0.0;
+    const tokensA = cleanTokens(a);
+    const tokensB = cleanTokens(b);
 
-    // Simple token overlap for now (can be improved with Levenshtein)
-    const setA = new Set(a.split(' '));
-    const setB = new Set(b.split(' '));
+    if (tokensA.join(' ') === tokensB.join(' ')) return 1.0;
+    if (tokensA.length === 0 || tokensB.length === 0) return 0.0;
+
+    const setA = new Set(tokensA);
+    const setB = new Set(tokensB);
     const intersection = new Set([...setA].filter(x => setB.has(x)));
     return (2.0 * intersection.size) / (setA.size + setB.size);
 };
 
 const teamOverlapScore = (fliqTitle: string, polyTitle: string): number => {
+    if (!fliqTitle || !polyTitle) return 0.0;
     const [fa, fb] = extractTeams(fliqTitle);
     const [pa, pb] = extractTeams(polyTitle);
 
-    if (!fa || !fb || !pa || !pb) return 0.0;
+    // Case 1: Both are match-ups (Team A vs Team B)
+    if (fa && fb && pa && pb) {
+        const scores = [
+            tokenSimilarity(fa, pa) + tokenSimilarity(fb, pb),
+            tokenSimilarity(fa, pb) + tokenSimilarity(fb, pa)
+        ];
+        return Math.max(...scores) / 2.0;
+    }
 
-    const scores = [
-        tokenSimilarity(fa, pa) + tokenSimilarity(fb, pb),
-        tokenSimilarity(fa, pb) + tokenSimilarity(fb, pa)
-    ];
+    // Case 2: One is a single participant market (e.g. "Will Man City win?")
+    // We check if the Poly title mentions either of the Fliq teams
+    if (fa && fb) {
+        const pTokens = cleanTokens(polyTitle).join(' ');
+        const scoreA = tokenSimilarity(fa, pTokens);
+        const scoreB = tokenSimilarity(fb, pTokens);
 
-    return Math.max(...scores) / 2.0;
+        // If Poly title contains a team name from Fliq match, that's a strong signal
+        // We set a floor here if the token similarity is high enough
+        const bestScore = Math.max(scoreA, scoreB);
+        if (bestScore > 0.6) return 0.8;
+        return bestScore;
+    }
+
+    // Fallback to general token similarity on whole titles
+    return tokenSimilarity(fliqTitle, polyTitle);
 };
 
 const dateProximityScore = (fliqEndTime: string, polyStart: string): number => {
@@ -59,6 +112,8 @@ const dateProximityScore = (fliqEndTime: string, polyStart: string): number => {
     try {
         const fliqTs = parseInt(fliqEndTime) * 1000;
         const polyTs = new Date(polyStart).getTime();
+
+        if (isNaN(fliqTs) || isNaN(polyTs)) return 0.0;
 
         const diffHours = Math.abs(fliqTs - polyTs) / (1000 * 60 * 60);
 
@@ -72,24 +127,28 @@ const dateProximityScore = (fliqEndTime: string, polyStart: string): number => {
 };
 
 export const computeMatchScore = (fliq: FliqQuestion, poly: PolyMarket): number => {
+    if (!fliq || !poly) return 0.0;
+    const bm = fliq.blockchainMetadata || {};
+    const fliqTitle = bm.parentQuestionHeader || bm.questionHeader || '';
+    const polyTitle = poly.title || poly.question || '';
+
+    if (!fliqTitle || !polyTitle) return 0.0;
+
     let score = 0.0;
 
     // 1. Team overlap (Weight: 0.6)
-    score += 0.6 * teamOverlapScore(
-        fliq.blockchainMetadata.parentQuestionHeader,
-        poly.title
-    );
+    score += 0.6 * teamOverlapScore(fliqTitle, polyTitle);
 
     // 2. Date proximity (Weight: 0.3)
     score += 0.3 * dateProximityScore(
-        fliq.blockchainMetadata.questionEndTime,
+        bm.questionEndTime,
         poly.startDate
     );
 
     // 3. Competition hint (Weight: 0.1)
-    const fliqHeader = fliq.blockchainMetadata.parentQuestionHeader.toLowerCase();
-    const polyTags = (poly.tags || []).map(t => t.label.toLowerCase());
-    if (polyTags.some(tag => fliqHeader.includes(tag))) {
+    const fliqHeaderLow = fliqTitle.toLowerCase();
+    const polyTags = (poly.tags || []).map(t => (t.label || '').toLowerCase());
+    if (polyTags.some(tag => tag && fliqHeaderLow.includes(tag))) {
         score += 0.1;
     }
 
@@ -128,5 +187,32 @@ export const calculateArb = (
     return {
         spread,
         profitPercent: profitPercent.toFixed(2) + '%'
+    };
+};
+
+/**
+ * Prepares a structured summary of a match for final verification.
+ * This can be used by an LLM to evaluate the logical consistency of a pairing.
+ */
+export const summarizeForLLM = (match: MatchResult) => {
+    return {
+        fliq: {
+            id: match.fliq.questionId,
+            title: match.fliq.blockchainMetadata.questionHeader,
+            parent: match.fliq.blockchainMetadata.parentQuestionHeader,
+            endTime: new Date(parseInt(match.fliq.blockchainMetadata.questionEndTime) * 1000).toISOString()
+        },
+        poly: {
+            id: match.poly.id,
+            title: match.poly.title,
+            startDate: match.poly.startDate,
+            outcomes: match.poly.outcomes
+        },
+        confidenceScore: match.score,
+        assessmentHints: [
+            "Check if both describe the same event and outcome side.",
+            "Verify that timestamps are roughly aligned (same day/match).",
+            "Ensure 'Yes' on Fliq represents the same winner as 'Yes' on Poly."
+        ]
     };
 };
