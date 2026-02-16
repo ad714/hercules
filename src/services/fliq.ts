@@ -97,7 +97,7 @@ export const filterFliqMatches = (questions: FliqQuestion[]) => {
                 return false;
             }
 
-            if (headers.includes('xplora')) {
+            if (headers.includes('xplora') || headers.includes('corner')) {
                 return false;
             }
 
@@ -118,13 +118,11 @@ export const filterFliqMatches = (questions: FliqQuestion[]) => {
             return timeA - timeB; // Ending soon first
         });
 
-    // Deduplicate multi-question markets by parentQuestionId
+    // Deduplicate markets by questionId (individual contracts)
     const seen = new Set<string>();
     return filtered.filter(q => {
-        const bm = q.blockchainMetadata || {};
-        const key = bm.parentQuestionId || q.questionId;
-        if (seen.has(key)) return false;
-        seen.add(key);
+        if (seen.has(q.questionId)) return false;
+        seen.add(q.questionId);
         return true;
     });
 };

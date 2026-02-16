@@ -9,13 +9,13 @@ A real-time dashboard for monitoring live prediction markets on [Fliq](https://f
 
 ## Features
 
-- **Live Market Monitoring** - Real-time fetching of active prediction markets from Fliq
-- **Multi-Category Support** - Football, basketball, cricket, crypto, politics, and more
-- **Smart Filtering** - Excludes rapid BTC/ETH markets and pass-related sports markets
-- **Deduplication** - Groups multi-question markets to avoid duplicate entries
-- **Time Formatting** - Intelligent display of remaining time (months, days, hours, minutes)
-- **Direct Links** - Click any market to open it directly on Fliq
-- **Polymarket Integration** - Infrastructure ready for cross-platform matching (coming soon)
+- **Arb Terminal** - Dedicated view for cross-platform arbitrage detection between Fliq and Polymarket
+- **AI Match Verification** - Uses Gemini 1.5 Flash to semanticly audit and confirm market pairings
+- **Deep Scan Discovery** - Paged scan of 1,000+ Polymarket assets to find regular season games
+- **Category Grouping** - Intelligent grouping of multi-question events into a single "Match" view
+- **Smart Filtering** - Excludes noisy market types (Passes, Offsides, Player Transfers)
+- **Centralized Knowledge** - Evolving brain of team synonyms and sport-specific guards
+- **Direct Execution** - Integrated simulator for calculating ROI across platforms
 
 ## Tech Stack
 
@@ -115,10 +115,12 @@ The app uses Vite's proxy to bypass CORS restrictions:
 - [x] Live Fliq market fetching
 - [x] Smart filtering and deduplication
 - [x] Table view with sortable columns
-- [ ] Polymarket market matching
-- [ ] Arbitrage opportunity detection
-- [ ] Orderbook visualization
-- [ ] Trade execution interface
+- [x] Polymarket market matching (Deep Scan)
+- [x] AI-Powered Arb Verification (Gemini)
+- [x] Arbitrage opportunity detection
+- [x] Orderbook visualization (Fliq side)
+- [ ] Dual Orderbook Simulator (Poly + Fliq)
+- [ ] Trade Execution (Paper Trading)
 - [ ] Historical data analysis
 
 ## Contributing
